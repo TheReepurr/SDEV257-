@@ -10,6 +10,8 @@ import {
   Text,
   TouchableOpacity,
   View,
+  TextInput,
+  Modal,
 } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
@@ -87,9 +89,41 @@ function ListShell({
   renderItem,
   keyExtractor,
 }) {
+  const [searchText, setSearchText] = useState("");
+  const [modalVisible, setModalVisible] = useState(false);
+  const [submittedText, setSubmittedText] = useState("");
+
+  const handleSubmit = () => {
+    setSubmittedText(searchText);
+    setModalVisible(true);
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#0b0d10" }}>
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }}>
+      {/* Search box at top of each screen */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+        <TextInput
+          placeholder="Type a search term..."
+          placeholderTextColor="#6B7280"
+          value={searchText}
+          onChangeText={setSearchText}
+          onSubmitEditing={handleSubmit}
+          returnKeyType="search"
+          style={{
+            backgroundColor: "#111827",
+            borderRadius: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            color: "white",
+            borderWidth: 1,
+            borderColor: "#374151",
+            marginBottom: 8,
+          }}
+        />
+      </View>
+
+      {/* Screen title */}
+      <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
         <Text style={{ color: "white", fontSize: 22, fontWeight: "700" }}>{title}</Text>
       </View>
 
@@ -137,6 +171,58 @@ function ListShell({
         }
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
       />
+
+      {/* Modal displaying submitted text */}
+      <Modal
+        transparent
+        visible={modalVisible}
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#111827",
+              padding: 20,
+              borderRadius: 12,
+              width: "80%",
+            }}
+          >
+            <Text style={{ color: "white", fontSize: 16, marginBottom: 12 }}>
+              You entered:
+            </Text>
+            <Text
+              style={{
+                color: "#38bdf8",
+                fontSize: 18,
+                fontWeight: "600",
+                marginBottom: 20,
+              }}
+            >
+              {submittedText || "(empty)"}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setModalVisible(false)}
+              style={{
+                alignSelf: "flex-end",
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                backgroundColor: "#1f2937",
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: "white", fontWeight: "600" }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -296,6 +382,3 @@ export default function App() {
     </NavigationContainer>
   );
 }
-
-
-
