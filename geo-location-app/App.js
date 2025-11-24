@@ -1,5 +1,4 @@
 // App.js
-// Chapter 21 all-in-one demo (updated for the assignment):
 // - Show user location
 // - Highlight ONE nearby restaurant (annotation)
 // - Plot region overlays (IPA vs Stout)
