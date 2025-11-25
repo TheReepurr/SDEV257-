@@ -24,12 +24,20 @@ import Animated, {
 } from "react-native-reanimated";
 
 /* =====================================================
-   Header images (reliable, one per screen)
+   Header images (themed per screen)
+   - Planets: space / planets
+   - Spaceships: spacecraft / ship-like
+   - Films: movie / cinema
    ===================================================== */
 const HEADER_IMAGES = {
-  planets: "https://picsum.photos/seed/planets/1200/400",
-  spaceships: "https://picsum.photos/seed/spaceships/1200/400",
-  films: "https://picsum.photos/seed/films/1200/400",
+  // PLANETS — real planet in space
+  planets: "https://images.pexels.com/photos/1257860/pexels-photo-1257860.jpeg?auto=compress&cs=tinysrgb&w=1200",
+
+  // SPACESHIPS — sci-fi starship / futuristic spacecraft
+  spaceships: "https://images.unsplash.com/photo-1523961131990-5ea7c61b2107?auto=format&w=1200&q=80",
+
+  // FILMS — film reel / movie theme
+  films: "https://images.pexels.com/photos/66134/pexels-photo-66134.jpeg?auto=compress&cs=tinysrgb&w=1200"
 };
 
 /* =====================================================
@@ -117,7 +125,7 @@ function ListShell({
 
   /*
     ------------------------------------------------------------------
-    ANIMATION IMPLEMENTED 
+    ANIMATION IMPLEMENTED ACCORDING TO CHAPTER 25 (React Native Reanimated)
 
     - Uses React Native Reanimated hooks:
       - useSharedValue
@@ -127,6 +135,12 @@ function ListShell({
     - What it does:
       The screen title ("Planets", "Spaceships", "Films") fades in and
       slides up slightly when each screen is shown.
+
+    - Why:
+      This matches the chapter's idea of "animating styling components":
+      we animate style properties (opacity and translateY) using shared
+      values, to draw attention to the most important element on the
+      screen (the current section title) and make the UI feel more alive.
 
     - How:
       * titleOpacity starts at 0 and animates to 1 with withTiming.
