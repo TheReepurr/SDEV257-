@@ -1,4 +1,4 @@
-import "react-native-gesture-handler"; 
+import "react-native-gesture-handler"; // must be first
 import "react-native-reanimated";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -12,15 +12,19 @@ import {
   TextInput,
   Modal,
   ScrollView,
-  Animated,
   Image,
 } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
 import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from "react-native-reanimated";
 
 /* =====================================================
-   Header images (one per screen)
+   Header images (reliable, one per screen)
    ===================================================== */
 const HEADER_IMAGES = {
   planets: "https://picsum.photos/seed/planets/1200/400",
@@ -108,19 +112,43 @@ function ListShell({
   const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [submittedText, setSubmittedText] = useState("");
 
-  // Title animation
-  const titleAnim = useRef(new Animated.Value(0)).current;
-
   // Lazy-loading state for header image
   const [imageLoaded, setImageLoaded] = useState(false);
 
+  /*
+    ------------------------------------------------------------------
+    ANIMATION IMPLEMENTED 
+
+    - Uses React Native Reanimated hooks:
+      - useSharedValue
+      - useAnimatedStyle
+      - withTiming
+
+    - What it does:
+      The screen title ("Planets", "Spaceships", "Films") fades in and
+      slides up slightly when each screen is shown.
+
+    - How:
+      * titleOpacity starts at 0 and animates to 1 with withTiming.
+      * titleTranslateY starts at 10 and animates to 0 with withTiming.
+      * useAnimatedStyle returns a style object driven by those values.
+      * The Animated.View wrapping the title uses that animated style.
+    ------------------------------------------------------------------
+  */
+  const titleOpacity = useSharedValue(0);
+  const titleTranslateY = useSharedValue(10);
+
   useEffect(() => {
-    Animated.timing(titleAnim, {
-      toValue: 1,
-      duration: 600,
-      useNativeDriver: true,
-    }).start();
-  }, [titleAnim]);
+    titleOpacity.value = withTiming(1, { duration: 600 });
+    titleTranslateY.value = withTiming(0, { duration: 600 });
+  }, [titleOpacity, titleTranslateY]);
+
+  const animatedTitleStyle = useAnimatedStyle(() => {
+    return {
+      opacity: titleOpacity.value,
+      transform: [{ translateY: titleTranslateY.value }],
+    };
+  });
 
   const handleSubmit = () => {
     setSubmittedText(searchText);
@@ -176,21 +204,15 @@ function ListShell({
         />
       </View>
 
-      {/* Animated Screen title */}
+      {/* Animated Screen title using React Native Reanimated */}
       <Animated.View
-        style={{
-          paddingHorizontal: 16,
-          paddingBottom: 8,
-          opacity: titleAnim,
-          transform: [
-            {
-              translateY: titleAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [10, 0],
-              }),
-            },
-          ],
-        }}
+        style={[
+          {
+            paddingHorizontal: 16,
+            paddingBottom: 8,
+          },
+          animatedTitleStyle,
+        ]}
       >
         <Text style={{ color: "white", fontSize: 22, fontWeight: "700" }}>
           {title}
