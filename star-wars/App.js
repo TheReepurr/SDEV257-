@@ -1,10 +1,9 @@
-import "react-native-gesture-handler"; // must be first
+import "react-native-gesture-handler"; 
 import "react-native-reanimated";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   RefreshControl,
   SafeAreaView,
   Text,
@@ -12,9 +11,22 @@ import {
   View,
   TextInput,
   Modal,
+  ScrollView,
+  Animated,
+  Image,
 } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
+import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler";
+
+/* =====================================================
+   Header images (one per screen)
+   ===================================================== */
+const HEADER_IMAGES = {
+  planets: "https://picsum.photos/seed/planets/1200/400",
+  spaceships: "https://picsum.photos/seed/spaceships/1200/400",
+  films: "https://picsum.photos/seed/films/1200/400",
+};
 
 /* =====================================================
    Reusable SWAPI list hook — handles fetch, refresh, and pagination
@@ -43,10 +55,14 @@ function useSwapiList(initialUrl, parsePage) {
         const json = await res.json();
         const { records, next } = parsePage(json);
 
-        setItems((prev) => (mode === "replace" ? records : [...prev, ...records]));
+        setItems((prev) =>
+          mode === "replace" ? records : [...prev, ...records]
+        );
         setNextUrl(next || null);
       } catch (e) {
-        if (e.name !== "AbortError") setError(e.message || "Something went wrong");
+        if (e.name !== "AbortError") {
+          setError(e.message || "Something went wrong");
+        }
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -76,32 +92,70 @@ function useSwapiList(initialUrl, parsePage) {
 }
 
 /* =====================================================
-   Shared UI List Shell
+   Shared Shell: image, header, search box, search modal
+   (List content is passed in as children)
    ===================================================== */
 function ListShell({
   title,
-  items,
-  loading,
   error,
-  refreshing,
   onRefresh,
-  onEndReached,
-  renderItem,
-  keyExtractor,
+  refreshing,
+  loading,
+  children,
+  imageUrl,
 }) {
   const [searchText, setSearchText] = useState("");
-  const [modalVisible, setModalVisible] = useState(false);
+  const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [submittedText, setSubmittedText] = useState("");
+
+  // Title animation
+  const titleAnim = useRef(new Animated.Value(0)).current;
+
+  // Lazy-loading state for header image
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  useEffect(() => {
+    Animated.timing(titleAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [titleAnim]);
 
   const handleSubmit = () => {
     setSubmittedText(searchText);
-    setModalVisible(true);
+    setSearchModalVisible(true);
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0b0d10" }}>
+    <View style={{ flex: 1, backgroundColor: "#0b0d10" }}>
+      {/* Themed header image (lazy-loaded) */}
+      <View
+        style={{
+          height: 150,
+          marginHorizontal: 16,
+          marginTop: 8,
+          marginBottom: 8,
+          borderRadius: 12,
+          overflow: "hidden",
+          backgroundColor: "#020617",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        {!imageLoaded && (
+          <ActivityIndicator style={{ position: "absolute" }} />
+        )}
+        <Image
+          source={{ uri: imageUrl }}
+          style={{ width: "100%", height: "100%" }}
+          resizeMode="cover"
+          onLoadEnd={() => setImageLoaded(true)}
+        />
+      </View>
+
       {/* Search box at top of each screen */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
         <TextInput
           placeholder="Type a search term..."
           placeholderTextColor="#6B7280"
@@ -122,11 +176,28 @@ function ListShell({
         />
       </View>
 
-      {/* Screen title */}
-      <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-        <Text style={{ color: "white", fontSize: 22, fontWeight: "700" }}>{title}</Text>
-      </View>
+      {/* Animated Screen title */}
+      <Animated.View
+        style={{
+          paddingHorizontal: 16,
+          paddingBottom: 8,
+          opacity: titleAnim,
+          transform: [
+            {
+              translateY: titleAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [10, 0],
+              }),
+            },
+          ],
+        }}
+      >
+        <Text style={{ color: "white", fontSize: 22, fontWeight: "700" }}>
+          {title}
+        </Text>
+      </Animated.View>
 
+      {/* Error area */}
       {error ? (
         <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
           <Text style={{ color: "#ff6b6b" }}>Error: {error}</Text>
@@ -144,40 +215,15 @@ function ListShell({
         </View>
       ) : null}
 
-      <FlatList
-        data={items}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        onEndReachedThreshold={0.25}
-        onEndReached={onEndReached}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          loading ? (
-            <View style={{ paddingTop: 40 }}>
-              <ActivityIndicator />
-            </View>
-          ) : (
-            <View style={{ paddingHorizontal: 16 }}>
-              <Text style={{ color: "white" }}>No data yet.</Text>
-            </View>
-          )
-        }
-        ListFooterComponent={
-          loading && items.length > 0 ? (
-            <View style={{ paddingVertical: 16 }}>
-              <ActivityIndicator />
-            </View>
-          ) : null
-        }
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
-      />
+      {/* Where each screen's ScrollView + Swipeables go */}
+      <View style={{ flex: 1 }}>{children}</View>
 
-      {/* Modal displaying submitted text */}
+      {/* Modal displaying submitted search text */}
       <Modal
         transparent
-        visible={modalVisible}
+        visible={searchModalVisible}
         animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
+        onRequestClose={() => setSearchModalVisible(false)}
       >
         <View
           style={{
@@ -209,7 +255,192 @@ function ListShell({
               {submittedText || "(empty)"}
             </Text>
             <TouchableOpacity
-              onPress={() => setModalVisible(false)}
+              onPress={() => setSearchModalVisible(false)}
+              style={{
+                alignSelf: "flex-end",
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                backgroundColor: "#1f2937",
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: "white", fontWeight: "600" }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+/* Helper for swipe text */
+function swipeTextForItem(item) {
+  if (typeof item === "string") return item;
+  if (item.name) return item.name;
+  if (item.title) return item.title;
+  return JSON.stringify(item);
+}
+
+/* Right swipe actions (visual only) */
+function renderSwipeActions() {
+  return (
+    <View
+      style={{
+        justifyContent: "center",
+        alignItems: "flex-end",
+        marginVertical: 6,
+      }}
+    >
+      <View
+        style={{
+          backgroundColor: "#1f2937",
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          borderRadius: 12,
+        }}
+      >
+        <Text style={{ color: "#fb923c", fontWeight: "600" }}>Show text</Text>
+      </View>
+    </View>
+  );
+}
+
+/* =====================================================
+   Planets Screen
+   ===================================================== */
+function PlanetsScreen() {
+  const initialUrl = "https://www.swapi.tech/api/planets";
+  const parsePage = useCallback((json) => {
+    const records = (json.results || []).map((p) => ({
+      id: String(p.uid),
+      name: p.name,
+      url: p.url,
+    }));
+    return { records, next: json.next || null };
+  }, []);
+
+  const { items, loading, error, refresh, refreshing, loadMore, hasMore } =
+    useSwapiList(initialUrl, parsePage);
+
+  const [swipeModalVisible, setSwipeModalVisible] = useState(false);
+  const [swipedItemText, setSwipedItemText] = useState("");
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0b0d10" }}>
+      <ListShell
+        title={`Planets ${hasMore ? "" : "(all loaded)"}`}
+        error={error}
+        onRefresh={refresh}
+        refreshing={refreshing}
+        loading={loading}
+        imageUrl={HEADER_IMAGES.planets}
+      >
+        {/* Requirement: On this screen, list of returned items is in a ScrollView */}
+        <ScrollView
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={refresh} />
+          }
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingBottom: 24,
+          }}
+        >
+          {items.length === 0 && !loading && !error ? (
+            <Text style={{ color: "white" }}>No data yet.</Text>
+          ) : null}
+
+          {items.map((item) => (
+            /* Requirement: Each item is Swipeable, swiping shows a modal with item text */
+            <Swipeable
+              key={item.id}
+              renderRightActions={renderSwipeActions}
+              onSwipeableOpen={() => {
+                setSwipedItemText(swipeTextForItem(item));
+                setSwipeModalVisible(true);
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: "#111827",
+                  padding: 14,
+                  borderRadius: 12,
+                  marginVertical: 6,
+                }}
+              >
+                <Text
+                  style={{ color: "white", fontSize: 16, fontWeight: "600" }}
+                >
+                  {item.name}
+                </Text>
+                <Text style={{ color: "#9CA3AF", fontSize: 12 }}>
+                  {item.url}
+                </Text>
+              </View>
+            </Swipeable>
+          ))}
+
+          {loading && (
+            <View style={{ paddingVertical: 16 }}>
+              <ActivityIndicator />
+            </View>
+          )}
+
+          {hasMore && !loading && items.length > 0 && (
+            <TouchableOpacity
+              onPress={loadMore}
+              style={{
+                marginTop: 8,
+                backgroundColor: "#1f2937",
+                paddingVertical: 10,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: "white", textAlign: "center" }}>
+                Load More
+              </Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </ListShell>
+
+      {/* Modal for swiped item text */}
+      <Modal
+        transparent
+        visible={swipeModalVisible}
+        animationType="fade"
+        onRequestClose={() => setSwipeModalVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#111827",
+              padding: 20,
+              borderRadius: 12,
+              width: "80%",
+            }}
+          >
+            <Text style={{ color: "white", fontSize: 16, marginBottom: 12 }}>
+              Swiped item:
+            </Text>
+            <Text
+              style={{
+                color: "#facc15",
+                fontSize: 18,
+                fontWeight: "600",
+                marginBottom: 20,
+              }}
+            >
+              {swipedItemText}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setSwipeModalVisible(false)}
               style={{
                 alignSelf: "flex-end",
                 paddingHorizontal: 16,
@@ -228,50 +459,6 @@ function ListShell({
 }
 
 /* =====================================================
-   Planets Screen
-   ===================================================== */
-function PlanetsScreen() {
-  const initialUrl = "https://www.swapi.tech/api/planets";
-  const parsePage = useCallback((json) => {
-    const records = (json.results || []).map((p) => ({
-      id: String(p.uid),
-      name: p.name,
-      url: p.url,
-    }));
-    return { records, next: json.next || null };
-  }, []);
-
-  const { items, loading, error, refresh, refreshing, loadMore, hasMore } = useSwapiList(
-    initialUrl,
-    parsePage
-  );
-
-  const renderItem = useCallback(
-    ({ item }) => (
-      <View style={{ backgroundColor: "#111827", padding: 14, borderRadius: 12, marginVertical: 6 }}>
-        <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>{item.name}</Text>
-        <Text style={{ color: "#9CA3AF", fontSize: 12 }}>{item.url}</Text>
-      </View>
-    ),
-    []
-  );
-
-  return (
-    <ListShell
-      title={`Planets ${hasMore ? "" : "(all loaded)"}`}
-      items={items}
-      loading={loading}
-      error={error}
-      refreshing={refreshing}
-      onRefresh={refresh}
-      onEndReached={loadMore}
-      renderItem={renderItem}
-      keyExtractor={(item) => item.id}
-    />
-  );
-}
-
-/* =====================================================
    Spaceships Screen
    ===================================================== */
 function SpaceshipsScreen() {
@@ -285,33 +472,142 @@ function SpaceshipsScreen() {
     return { records, next: json.next || null };
   }, []);
 
-  const { items, loading, error, refresh, refreshing, loadMore, hasMore } = useSwapiList(
-    initialUrl,
-    parsePage
-  );
+  const { items, loading, error, refresh, refreshing, loadMore, hasMore } =
+    useSwapiList(initialUrl, parsePage);
 
-  const renderItem = useCallback(
-    ({ item }) => (
-      <View style={{ backgroundColor: "#111827", padding: 14, borderRadius: 12, marginVertical: 6 }}>
-        <Text style={{ color: "white", fontSize: 16, fontWeight: "600" }}>{item.name}</Text>
-        <Text style={{ color: "#9CA3AF", fontSize: 12 }}>{item.url}</Text>
-      </View>
-    ),
-    []
-  );
+  const [swipeModalVisible, setSwipeModalVisible] = useState(false);
+  const [swipedItemText, setSwipedItemText] = useState("");
 
   return (
-    <ListShell
-      title={`Spaceships ${hasMore ? "" : "(all loaded)"}`}
-      items={items}
-      loading={loading}
-      error={error}
-      refreshing={refreshing}
-      onRefresh={refresh}
-      onEndReached={loadMore}
-      renderItem={renderItem}
-      keyExtractor={(item) => item.id}
-    />
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0b0d10" }}>
+      <ListShell
+        title={`Spaceships ${hasMore ? "" : "(all loaded)"}`}
+        error={error}
+        onRefresh={refresh}
+        refreshing={refreshing}
+        loading={loading}
+        imageUrl={HEADER_IMAGES.spaceships}
+      >
+        {/* Requirement: On this screen, list of returned items is in a ScrollView */}
+        <ScrollView
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={refresh} />
+          }
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingBottom: 24,
+          }}
+        >
+          {items.length === 0 && !loading && !error ? (
+            <Text style={{ color: "white" }}>No data yet.</Text>
+          ) : null}
+
+          {items.map((item) => (
+            /* Requirement: Each item is Swipeable, swiping shows a modal with item text */
+            <Swipeable
+              key={item.id}
+              renderRightActions={renderSwipeActions}
+              onSwipeableOpen={() => {
+                setSwipedItemText(swipeTextForItem(item));
+                setSwipeModalVisible(true);
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: "#111827",
+                  padding: 14,
+                  borderRadius: 12,
+                  marginVertical: 6,
+                }}
+              >
+                <Text
+                  style={{ color: "white", fontSize: 16, fontWeight: "600" }}
+                >
+                  {item.name}
+                </Text>
+                <Text style={{ color: "#9CA3AF", fontSize: 12 }}>
+                  {item.url}
+                </Text>
+              </View>
+            </Swipeable>
+          ))}
+
+          {loading && (
+            <View style={{ paddingVertical: 16 }}>
+              <ActivityIndicator />
+            </View>
+          )}
+
+          {hasMore && !loading && items.length > 0 && (
+            <TouchableOpacity
+              onPress={loadMore}
+              style={{
+                marginTop: 8,
+                backgroundColor: "#1f2937",
+                paddingVertical: 10,
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: "white", textAlign: "center" }}>
+                Load More
+              </Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </ListShell>
+
+      {/* Modal for swiped item text */}
+      <Modal
+        transparent
+        visible={swipeModalVisible}
+        animationType="fade"
+        onRequestClose={() => setSwipeModalVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#111827",
+              padding: 20,
+              borderRadius: 12,
+              width: "80%",
+            }}
+          >
+            <Text style={{ color: "white", fontSize: 16, marginBottom: 12 }}>
+              Swiped item:
+            </Text>
+            <Text
+              style={{
+                color: "#facc15",
+                fontSize: 18,
+                fontWeight: "600",
+                marginBottom: 20,
+              }}
+            >
+              {swipedItemText}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setSwipeModalVisible(false)}
+              style={{
+                alignSelf: "flex-end",
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                backgroundColor: "#1f2937",
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: "white", fontWeight: "600" }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
@@ -330,32 +626,128 @@ function FilmsScreen() {
     return { records, next: json.next || null };
   }, []);
 
-  const { items, loading, error, refresh, refreshing } = useSwapiList(initialUrl, parsePage);
-
-  const renderItem = useCallback(
-    ({ item }) => (
-      <View style={{ backgroundColor: "#111827", padding: 14, borderRadius: 12, marginVertical: 6 }}>
-        <Text style={{ color: "white", fontSize: 16, fontWeight: "700" }}>{item.title}</Text>
-        <Text style={{ color: "#9CA3AF", fontSize: 12 }}>
-          Release: {item.release_date} • Director: {item.director}
-        </Text>
-      </View>
-    ),
-    []
+  const { items, loading, error, refresh, refreshing } = useSwapiList(
+    initialUrl,
+    parsePage
   );
 
+  const [swipeModalVisible, setSwipeModalVisible] = useState(false);
+  const [swipedItemText, setSwipedItemText] = useState("");
+
   return (
-    <ListShell
-      title="Films"
-      items={items}
-      loading={loading}
-      error={error}
-      refreshing={refreshing}
-      onRefresh={refresh}
-      onEndReached={() => {}}
-      renderItem={renderItem}
-      keyExtractor={(item) => item.id}
-    />
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#0b0d10" }}>
+      <ListShell
+        title="Films"
+        error={error}
+        onRefresh={refresh}
+        refreshing={refreshing}
+        loading={loading}
+        imageUrl={HEADER_IMAGES.films}
+      >
+        {/* Requirement: On this screen, list of returned items is in a ScrollView */}
+        <ScrollView
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={refresh} />
+          }
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingBottom: 24,
+          }}
+        >
+          {items.length === 0 && !loading && !error ? (
+            <Text style={{ color: "white" }}>No data yet.</Text>
+          ) : null}
+
+          {items.map((item) => (
+            /* Requirement: Each item is Swipeable, swiping shows a modal with item text */
+            <Swipeable
+              key={item.id}
+              renderRightActions={renderSwipeActions}
+              onSwipeableOpen={() => {
+                setSwipedItemText(swipeTextForItem(item));
+                setSwipeModalVisible(true);
+              }}
+            >
+              <View
+                style={{
+                  backgroundColor: "#111827",
+                  padding: 14,
+                  borderRadius: 12,
+                  marginVertical: 6,
+                }}
+              >
+                <Text
+                  style={{ color: "white", fontSize: 16, fontWeight: "700" }}
+                >
+                  {item.title}
+                </Text>
+                <Text style={{ color: "#9CA3AF", fontSize: 12 }}>
+                  Release: {item.release_date} • Director: {item.director}
+                </Text>
+              </View>
+            </Swipeable>
+          ))}
+
+          {loading && (
+            <View style={{ paddingVertical: 16 }}>
+              <ActivityIndicator />
+            </View>
+          )}
+        </ScrollView>
+      </ListShell>
+
+      {/* Modal for swiped item text */}
+      <Modal
+        transparent
+        visible={swipeModalVisible}
+        animationType="fade"
+        onRequestClose={() => setSwipeModalVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#111827",
+              padding: 20,
+              borderRadius: 12,
+              width: "80%",
+            }}
+          >
+            <Text style={{ color: "white", fontSize: 16, marginBottom: 12 }}>
+              Swiped item:
+            </Text>
+            <Text
+              style={{
+                color: "#facc15",
+                fontSize: 18,
+                fontWeight: "600",
+                marginBottom: 20,
+              }}
+            >
+              {swipedItemText}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setSwipeModalVisible(false)}
+              style={{
+                alignSelf: "flex-end",
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                backgroundColor: "#1f2937",
+                borderRadius: 8,
+              }}
+            >
+              <Text style={{ color: "white", fontWeight: "600" }}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
@@ -366,19 +758,21 @@ const Tab = createMaterialTopTabNavigator();
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={{
-          tabBarStyle: { backgroundColor: "#0b0d10" },
-          tabBarActiveTintColor: "white",
-          tabBarInactiveTintColor: "#9CA3AF",
-          tabBarIndicatorStyle: { backgroundColor: "white" },
-        }}
-      >
-        <Tab.Screen name="Planets" component={PlanetsScreen} />
-        <Tab.Screen name="Spaceships" component={SpaceshipsScreen} />
-        <Tab.Screen name="Films" component={FilmsScreen} />
-      </Tab.Navigator>
-    </NavigationContainer>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NavigationContainer>
+        <Tab.Navigator
+          screenOptions={{
+            tabBarStyle: { backgroundColor: "#0b0d10" },
+            tabBarActiveTintColor: "white",
+            tabBarInactiveTintColor: "#9CA3AF",
+            tabBarIndicatorStyle: { backgroundColor: "white" },
+          }}
+        >
+          <Tab.Screen name="Planets" component={PlanetsScreen} />
+          <Tab.Screen name="Spaceships" component={SpaceshipsScreen} />
+          <Tab.Screen name="Films" component={FilmsScreen} />
+        </Tab.Navigator>
+      </NavigationContainer>
+    </GestureHandlerRootView>
   );
 }
