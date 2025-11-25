@@ -25,9 +25,6 @@ import Animated, {
 
 /* =====================================================
    Header images (themed per screen)
-   - Planets: space / planets
-   - Spaceships: spacecraft / ship-like
-   - Films: movie / cinema
    ===================================================== */
 const HEADER_IMAGES = {
   // PLANETS — real planet in space
