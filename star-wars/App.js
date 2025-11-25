@@ -122,7 +122,7 @@ function ListShell({
 
   /*
     ------------------------------------------------------------------
-    ANIMATION IMPLEMENTED ACCORDING TO CHAPTER 25 (React Native Reanimated)
+    ANIMATION
 
     - Uses React Native Reanimated hooks:
       - useSharedValue
@@ -132,18 +132,6 @@ function ListShell({
     - What it does:
       The screen title ("Planets", "Spaceships", "Films") fades in and
       slides up slightly when each screen is shown.
-
-    - Why:
-      This matches the chapter's idea of "animating styling components":
-      we animate style properties (opacity and translateY) using shared
-      values, to draw attention to the most important element on the
-      screen (the current section title) and make the UI feel more alive.
-
-    - How:
-      * titleOpacity starts at 0 and animates to 1 with withTiming.
-      * titleTranslateY starts at 10 and animates to 0 with withTiming.
-      * useAnimatedStyle returns a style object driven by those values.
-      * The Animated.View wrapping the title uses that animated style.
     ------------------------------------------------------------------
   */
   const titleOpacity = useSharedValue(0);
