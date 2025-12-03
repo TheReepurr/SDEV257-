@@ -1,3 +1,4 @@
+// App.js
 import "react-native-gesture-handler"; // must be first
 import "react-native-reanimated";
 
@@ -22,23 +23,28 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
 } from "react-native-reanimated";
+import NetInfo from "@react-native-community/netinfo"; // 👈 NEW
 
 /* =====================================================
    Header images (themed per screen)
    ===================================================== */
 const HEADER_IMAGES = {
   // PLANETS — real planet in space
-  planets: "https://images.pexels.com/photos/1257860/pexels-photo-1257860.jpeg?auto=compress&cs=tinysrgb&w=1200",
+  planets:
+    "https://images.pexels.com/photos/1257860/pexels-photo-1257860.jpeg?auto=compress&cs=tinysrgb&w=1200",
 
   // SPACESHIPS — sci-fi starship / futuristic spacecraft
-  spaceships: "https://images.unsplash.com/photo-1523961131990-5ea7c61b2107?auto=format&w=1200&q=80",
+  spaceships:
+    "https://images.unsplash.com/photo-1523961131990-5ea7c61b2107?auto=format&w=1200&q=80",
 
   // FILMS — film reel / movie theme
-  films: "https://images.pexels.com/photos/66134/pexels-photo-66134.jpeg?auto=compress&cs=tinysrgb&w=1200"
+  films:
+    "https://images.pexels.com/photos/66134/pexels-photo-66134.jpeg?auto=compress&cs=tinysrgb&w=1200",
 };
 
 /* =====================================================
    Reusable SWAPI list hook — handles fetch, refresh, and pagination
+   + Network detection
    ===================================================== */
 function useSwapiList(initialUrl, parsePage) {
   const [items, setItems] = useState([]);
@@ -59,6 +65,16 @@ function useSwapiList(initialUrl, parsePage) {
       abortRef.current = controller;
 
       try {
+        // 👇 NEW: check network before trying to fetch
+        const netState = await NetInfo.fetch();
+        const online =
+          netState.isConnected && netState.isInternetReachable !== false;
+
+        if (!online) {
+          // Custom error type so we can distinguish it
+          throw new Error("NO_NETWORK");
+        }
+
         const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
@@ -69,7 +85,13 @@ function useSwapiList(initialUrl, parsePage) {
         );
         setNextUrl(next || null);
       } catch (e) {
-        if (e.name !== "AbortError") {
+        if (e.name === "AbortError") {
+          // ignore aborts
+        } else if (e.message === "NO_NETWORK") {
+          setError(
+            "No internet connection detected. Please check your network and pull to refresh once you're back online."
+          );
+        } else {
           setError(e.message || "Something went wrong");
         }
       } finally {
@@ -97,7 +119,15 @@ function useSwapiList(initialUrl, parsePage) {
     if (!loading && nextUrl) fetchPage(nextUrl, "append");
   }, [loading, nextUrl, fetchPage]);
 
-  return { items, loading, error, refresh, refreshing, loadMore, hasMore: !!nextUrl };
+  return {
+    items,
+    loading,
+    error,
+    refresh,
+    refreshing,
+    loadMore,
+    hasMore: !!nextUrl,
+  };
 }
 
 /* =====================================================
@@ -120,20 +150,6 @@ function ListShell({
   // Lazy-loading state for header image
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  /*
-    ------------------------------------------------------------------
-    ANIMATION
-
-    - Uses React Native Reanimated hooks:
-      - useSharedValue
-      - useAnimatedStyle
-      - withTiming
-
-    - What it does:
-      The screen title ("Planets", "Spaceships", "Films") fades in and
-      slides up slightly when each screen is shown.
-    ------------------------------------------------------------------
-  */
   const titleOpacity = useSharedValue(0);
   const titleTranslateY = useSharedValue(10);
 
@@ -218,7 +234,7 @@ function ListShell({
         </Text>
       </Animated.View>
 
-      {/* Error area */}
+      {/* Error area (shows network error as well) */}
       {error ? (
         <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
           <Text style={{ color: "#ff6b6b" }}>Error: {error}</Text>
@@ -231,7 +247,9 @@ function ListShell({
               borderRadius: 8,
             }}
           >
-            <Text style={{ color: "white", textAlign: "center" }}>Try Again</Text>
+            <Text style={{ color: "white", textAlign: "center" }}>
+              Try Again
+            </Text>
           </TouchableOpacity>
         </View>
       ) : null}
