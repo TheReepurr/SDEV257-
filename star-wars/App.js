@@ -17,27 +17,23 @@ import {
 } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Swipeable, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
 } from "react-native-reanimated";
-import NetInfo from "@react-native-community/netinfo"; // 👈 NEW
+import NetInfo from "@react-native-community/netinfo";
 
 /* =====================================================
    Header images (themed per screen)
    ===================================================== */
 const HEADER_IMAGES = {
-  // PLANETS — real planet in space
   planets:
     "https://images.pexels.com/photos/1257860/pexels-photo-1257860.jpeg?auto=compress&cs=tinysrgb&w=1200",
-
-  // SPACESHIPS — sci-fi starship / futuristic spacecraft
   spaceships:
     "https://images.unsplash.com/photo-1523961131990-5ea7c61b2107?auto=format&w=1200&q=80",
-
-  // FILMS — film reel / movie theme
   films:
     "https://images.pexels.com/photos/66134/pexels-photo-66134.jpeg?auto=compress&cs=tinysrgb&w=1200",
 };
@@ -65,13 +61,11 @@ function useSwapiList(initialUrl, parsePage) {
       abortRef.current = controller;
 
       try {
-        // 👇 NEW: check network before trying to fetch
         const netState = await NetInfo.fetch();
         const online =
           netState.isConnected && netState.isInternetReachable !== false;
 
         if (!online) {
-          // Custom error type so we can distinguish it
           throw new Error("NO_NETWORK");
         }
 
@@ -86,7 +80,7 @@ function useSwapiList(initialUrl, parsePage) {
         setNextUrl(next || null);
       } catch (e) {
         if (e.name === "AbortError") {
-          // ignore aborts
+          // ignore
         } else if (e.message === "NO_NETWORK") {
           setError(
             "No internet connection detected. Please check your network and pull to refresh once you're back online."
@@ -131,8 +125,8 @@ function useSwapiList(initialUrl, parsePage) {
 }
 
 /* =====================================================
-   Shared Shell: image, header, search box, search modal
-   (List content is passed in as children)
+   Shared Shell: header, search box, title, error, children
+   (Search state is controlled by each screen)
    ===================================================== */
 function ListShell({
   title,
@@ -142,12 +136,9 @@ function ListShell({
   loading,
   children,
   imageUrl,
+  searchText,
+  onSearchTextChange,
 }) {
-  const [searchText, setSearchText] = useState("");
-  const [searchModalVisible, setSearchModalVisible] = useState(false);
-  const [submittedText, setSubmittedText] = useState("");
-
-  // Lazy-loading state for header image
   const [imageLoaded, setImageLoaded] = useState(false);
 
   const titleOpacity = useSharedValue(0);
@@ -165,14 +156,9 @@ function ListShell({
     };
   });
 
-  const handleSubmit = () => {
-    setSubmittedText(searchText);
-    setSearchModalVisible(true);
-  };
-
   return (
     <View style={{ flex: 1, backgroundColor: "#0b0d10" }}>
-      {/* Themed header image (lazy-loaded) */}
+      {/* Header image */}
       <View
         style={{
           height: 150,
@@ -197,14 +183,13 @@ function ListShell({
         />
       </View>
 
-      {/* Search box at top of each screen */}
+      {/* Search box */}
       <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
         <TextInput
           placeholder="Type a search term..."
           placeholderTextColor="#6B7280"
           value={searchText}
-          onChangeText={setSearchText}
-          onSubmitEditing={handleSubmit}
+          onChangeText={onSearchTextChange}
           returnKeyType="search"
           style={{
             backgroundColor: "#111827",
@@ -219,7 +204,7 @@ function ListShell({
         />
       </View>
 
-      {/* Animated Screen title using React Native Reanimated */}
+      {/* Animated title */}
       <Animated.View
         style={[
           {
@@ -234,7 +219,7 @@ function ListShell({
         </Text>
       </Animated.View>
 
-      {/* Error area (shows network error as well) */}
+      {/* Error area */}
       {error ? (
         <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
           <Text style={{ color: "#ff6b6b" }}>Error: {error}</Text>
@@ -254,60 +239,7 @@ function ListShell({
         </View>
       ) : null}
 
-      {/* Where each screen's ScrollView + Swipeables go */}
       <View style={{ flex: 1 }}>{children}</View>
-
-      {/* Modal displaying submitted search text */}
-      <Modal
-        transparent
-        visible={searchModalVisible}
-        animationType="fade"
-        onRequestClose={() => setSearchModalVisible(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "#111827",
-              padding: 20,
-              borderRadius: 12,
-              width: "80%",
-            }}
-          >
-            <Text style={{ color: "white", fontSize: 16, marginBottom: 12 }}>
-              You entered:
-            </Text>
-            <Text
-              style={{
-                color: "#38bdf8",
-                fontSize: 18,
-                fontWeight: "600",
-                marginBottom: 20,
-              }}
-            >
-              {submittedText || "(empty)"}
-            </Text>
-            <TouchableOpacity
-              onPress={() => setSearchModalVisible(false)}
-              style={{
-                alignSelf: "flex-end",
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                backgroundColor: "#1f2937",
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: "white", fontWeight: "600" }}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -320,7 +252,6 @@ function swipeTextForItem(item) {
   return JSON.stringify(item);
 }
 
-/* Right swipe actions (visual only) */
 function renderSwipeActions() {
   return (
     <View
@@ -338,22 +269,24 @@ function renderSwipeActions() {
           borderRadius: 12,
         }}
       >
-        <Text style={{ color: "#fb923c", fontWeight: "600" }}>Show text</Text>
+        <Text style={{ color: "#fb923c", fontWeight: "600" }}>Details</Text>
       </View>
     </View>
   );
 }
 
 /* =====================================================
-   Planets Screen
+   PLANETS LIST SCREEN (inside a Stack)
+   Swipe LEFT -> navigate to PlanetDetail
+   Search filters shown planets
    ===================================================== */
-function PlanetsScreen() {
+function PlanetsScreen({ navigation }) {
   const initialUrl = "https://www.swapi.tech/api/planets";
   const parsePage = useCallback((json) => {
     const records = (json.results || []).map((p) => ({
       id: String(p.uid),
       name: p.name,
-      url: p.url,
+      url: p.url, // detail endpoint
     }));
     return { records, next: json.next || null };
   }, []);
@@ -361,8 +294,18 @@ function PlanetsScreen() {
   const { items, loading, error, refresh, refreshing, loadMore, hasMore } =
     useSwapiList(initialUrl, parsePage);
 
-  const [swipeModalVisible, setSwipeModalVisible] = useState(false);
-  const [swipedItemText, setSwipedItemText] = useState("");
+  const [searchText, setSearchText] = useState("");
+
+  const normalizedSearch = searchText.trim().toLowerCase();
+  const filteredItems =
+    normalizedSearch.length === 0
+      ? items
+      : items.filter((item) =>
+          item.name.toLowerCase().includes(normalizedSearch)
+        );
+
+  const showNoMatches =
+    !loading && !error && items.length > 0 && filteredItems.length === 0;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#0b0d10" }}>
@@ -373,8 +316,9 @@ function PlanetsScreen() {
         refreshing={refreshing}
         loading={loading}
         imageUrl={HEADER_IMAGES.planets}
+        searchText={searchText}
+        onSearchTextChange={setSearchText}
       >
-        {/* Requirement: On this screen, list of returned items is in a ScrollView */}
         <ScrollView
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={refresh} />
@@ -388,15 +332,23 @@ function PlanetsScreen() {
             <Text style={{ color: "white" }}>No data yet.</Text>
           ) : null}
 
-          {items.map((item) => (
-            /* Requirement: Each item is Swipeable, swiping shows a modal with item text */
+          {showNoMatches && (
+            <Text style={{ color: "#9CA3AF", marginBottom: 8 }}>
+              No planets match "{searchText}".
+            </Text>
+          )}
+
+          {filteredItems.map((item) => (
             <Swipeable
               key={item.id}
               renderRightActions={renderSwipeActions}
-              onSwipeableOpen={() => {
-                setSwipedItemText(swipeTextForItem(item));
-                setSwipeModalVisible(true);
-              }}
+              // Swipe LEFT (opening right actions) -> navigate to detail
+              onSwipeableRightOpen={() =>
+                navigation.navigate("PlanetDetail", {
+                  url: item.url,
+                  name: item.name,
+                })
+              }
             >
               <View
                 style={{
@@ -441,64 +393,284 @@ function PlanetsScreen() {
           )}
         </ScrollView>
       </ListShell>
-
-      {/* Modal for swiped item text */}
-      <Modal
-        transparent
-        visible={swipeModalVisible}
-        animationType="fade"
-        onRequestClose={() => setSwipeModalVisible(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.6)",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <View
-            style={{
-              backgroundColor: "#111827",
-              padding: 20,
-              borderRadius: 12,
-              width: "80%",
-            }}
-          >
-            <Text style={{ color: "white", fontSize: 16, marginBottom: 12 }}>
-              Swiped item:
-            </Text>
-            <Text
-              style={{
-                color: "#facc15",
-                fontSize: 18,
-                fontWeight: "600",
-                marginBottom: 20,
-              }}
-            >
-              {swipedItemText}
-            </Text>
-            <TouchableOpacity
-              onPress={() => setSwipeModalVisible(false)}
-              style={{
-                alignSelf: "flex-end",
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                backgroundColor: "#1f2937",
-                borderRadius: 8,
-              }}
-            >
-              <Text style={{ color: "white", fontWeight: "600" }}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
 
 /* =====================================================
-   Spaceships Screen
+   PLANET DETAIL SCREEN
+   Fetches detail URL and shows bulk of data
+   ===================================================== */
+function PlanetDetailScreen({ route, navigation }) {
+  const { url, name } = route.params;
+  const [planet, setPlanet] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchDetail = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const netState = await NetInfo.fetch();
+        const online =
+          netState.isConnected && netState.isInternetReachable !== false;
+        if (!online) throw new Error("No internet connection");
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+
+        const props = json?.result?.properties || {};
+        if (mounted) setPlanet(props);
+      } catch (e) {
+        if (mounted) setError(e.message || "Failed to load planet");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    fetchDetail();
+    return () => {
+      mounted = false;
+    };
+  }, [url]);
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#020617" }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 16,
+          paddingBottom: 24,
+        }}
+      >
+        {/* Page title + subtitle */}
+        <Text
+          style={{
+            color: "white",
+            fontSize: 28,
+            fontWeight: "800",
+            marginBottom: 4,
+          }}
+        >
+          {name}
+        </Text>
+        <Text
+          style={{
+            color: "#9CA3AF",
+            fontSize: 14,
+            marginBottom: 16,
+          }}
+        >
+          Planet detail from swapi.tech
+        </Text>
+
+        {/* Loading / error states */}
+        {loading && (
+          <View style={{ paddingVertical: 20 }}>
+            <ActivityIndicator />
+          </View>
+        )}
+
+        {error && !loading && (
+          <View
+            style={{
+              backgroundColor: "#7f1d1d",
+              padding: 12,
+              borderRadius: 10,
+              marginBottom: 16,
+            }}
+          >
+            <Text style={{ color: "#fecaca" }}>Error: {error}</Text>
+          </View>
+        )}
+
+        {/* Content */}
+        {planet && !loading && (
+          <>
+            {/* Quick chips */}
+            <View
+              style={{
+                backgroundColor: "#0f172a",
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 12,
+              }}
+            >
+              <Text
+                style={{
+                  color: "#F9FAFB",
+                  fontSize: 16,
+                  fontWeight: "700",
+                  marginBottom: 10,
+                }}
+              >
+                At a glance
+              </Text>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginBottom: 6,
+                }}
+              >
+                <Tag label="Climate" value={planet.climate} />
+                <Tag label="Terrain" value={planet.terrain} />
+                <Tag label="Population" value={planet.population} />
+                <Tag label="Gravity" value={planet.gravity} />
+                <Tag label="Diameter" value={planet.diameter} />
+              </View>
+
+              <View style={{ marginTop: 8 }}>
+                <DetailRow label="Rotation period" value={planet.rotation_period} />
+                <DetailRow label="Orbital period" value={planet.orbital_period} />
+                <DetailRow label="Surface water" value={planet.surface_water} />
+              </View>
+            </View>
+
+            {/* Bulk properties (render everything) */}
+            <View
+              style={{
+                backgroundColor: "#0f172a",
+                borderRadius: 16,
+                padding: 16,
+              }}
+            >
+              <SectionHeader title="All properties" />
+
+              {Object.entries(planet).map(([key, value]) => {
+                const display =
+                  Array.isArray(value)
+                    ? value.length === 0
+                      ? ""
+                      : value.join(", ")
+                    : value;
+
+                return (
+                  <DetailRow
+                    key={key}
+                    label={prettyKey(key)}
+                    value={String(display)}
+                  />
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {/* Back button */}
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{
+            marginTop: 20,
+            alignSelf: "center",
+            minWidth: "60%",
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            borderRadius: 999,
+            backgroundColor: "#1d4ed8",
+          }}
+        >
+          <Text
+            style={{
+              color: "white",
+              textAlign: "center",
+              fontWeight: "600",
+              fontSize: 16,
+            }}
+          >
+            Back to planets
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function prettyKey(key) {
+  return String(key)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function DetailRow({ label, value }) {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        justifyContent: "space-between",
+        paddingVertical: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: "#111827",
+      }}
+    >
+      <Text style={{ color: "#9CA3AF", fontSize: 14, maxWidth: "42%" }}>
+        {label}
+      </Text>
+      <Text
+        style={{
+          color: "#E5E7EB",
+          fontSize: 14,
+          fontWeight: "600",
+          maxWidth: "55%",
+          textAlign: "right",
+        }}
+      >
+        {trimmed}
+      </Text>
+    </View>
+  );
+}
+
+function SectionHeader({ title }) {
+  return (
+    <Text
+      style={{
+        marginTop: 4,
+        marginBottom: 10,
+        color: "#F9FAFB",
+        fontSize: 16,
+        fontWeight: "700",
+      }}
+    >
+      {title}
+    </Text>
+  );
+}
+
+function Tag({ label, value }) {
+  if (!value) return null;
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        borderRadius: 999,
+        backgroundColor: "#111827",
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        alignItems: "center",
+      }}
+    >
+      <Text style={{ color: "#9CA3AF", fontSize: 12 }}>{label}: </Text>
+      <Text style={{ color: "#E5E7EB", fontSize: 12, fontWeight: "600" }}>
+        {String(value)}
+      </Text>
+    </View>
+  );
+}
+
+/* =====================================================
+   SPACESHIPS SCREEN (unchanged: swipe shows modal)
    ===================================================== */
 function SpaceshipsScreen() {
   const initialUrl = "https://www.swapi.tech/api/starships";
@@ -514,6 +686,19 @@ function SpaceshipsScreen() {
   const { items, loading, error, refresh, refreshing, loadMore, hasMore } =
     useSwapiList(initialUrl, parsePage);
 
+  const [searchText, setSearchText] = useState("");
+
+  const normalizedSearch = searchText.trim().toLowerCase();
+  const filteredItems =
+    normalizedSearch.length === 0
+      ? items
+      : items.filter((item) =>
+          item.name.toLowerCase().includes(normalizedSearch)
+        );
+
+  const showNoMatches =
+    !loading && !error && items.length > 0 && filteredItems.length === 0;
+
   const [swipeModalVisible, setSwipeModalVisible] = useState(false);
   const [swipedItemText, setSwipedItemText] = useState("");
 
@@ -526,8 +711,9 @@ function SpaceshipsScreen() {
         refreshing={refreshing}
         loading={loading}
         imageUrl={HEADER_IMAGES.spaceships}
+        searchText={searchText}
+        onSearchTextChange={setSearchText}
       >
-        {/* Requirement: On this screen, list of returned items is in a ScrollView */}
         <ScrollView
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={refresh} />
@@ -541,12 +727,17 @@ function SpaceshipsScreen() {
             <Text style={{ color: "white" }}>No data yet.</Text>
           ) : null}
 
-          {items.map((item) => (
-            /* Requirement: Each item is Swipeable, swiping shows a modal with item text */
+          {showNoMatches && (
+            <Text style={{ color: "#9CA3AF", marginBottom: 8 }}>
+              No spaceships match "{searchText}".
+            </Text>
+          )}
+
+          {filteredItems.map((item) => (
             <Swipeable
               key={item.id}
               renderRightActions={renderSwipeActions}
-              onSwipeableOpen={() => {
+              onSwipeableRightOpen={() => {
                 setSwipedItemText(swipeTextForItem(item));
                 setSwipeModalVisible(true);
               }}
@@ -595,7 +786,6 @@ function SpaceshipsScreen() {
         </ScrollView>
       </ListShell>
 
-      {/* Modal for swiped item text */}
       <Modal
         transparent
         visible={swipeModalVisible}
@@ -651,7 +841,7 @@ function SpaceshipsScreen() {
 }
 
 /* =====================================================
-   Films Screen
+   FILMS SCREEN (unchanged: swipe shows modal)
    ===================================================== */
 function FilmsScreen() {
   const initialUrl = "https://www.swapi.tech/api/films";
@@ -670,6 +860,19 @@ function FilmsScreen() {
     parsePage
   );
 
+  const [searchText, setSearchText] = useState("");
+
+  const normalizedSearch = searchText.trim().toLowerCase();
+  const filteredItems =
+    normalizedSearch.length === 0
+      ? items
+      : items.filter((item) =>
+          item.title.toLowerCase().includes(normalizedSearch)
+        );
+
+  const showNoMatches =
+    !loading && !error && items.length > 0 && filteredItems.length === 0;
+
   const [swipeModalVisible, setSwipeModalVisible] = useState(false);
   const [swipedItemText, setSwipedItemText] = useState("");
 
@@ -682,8 +885,9 @@ function FilmsScreen() {
         refreshing={refreshing}
         loading={loading}
         imageUrl={HEADER_IMAGES.films}
+        searchText={searchText}
+        onSearchTextChange={setSearchText}
       >
-        {/* Requirement: On this screen, list of returned items is in a ScrollView */}
         <ScrollView
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={refresh} />
@@ -697,12 +901,17 @@ function FilmsScreen() {
             <Text style={{ color: "white" }}>No data yet.</Text>
           ) : null}
 
-          {items.map((item) => (
-            /* Requirement: Each item is Swipeable, swiping shows a modal with item text */
+          {showNoMatches && (
+            <Text style={{ color: "#9CA3AF", marginBottom: 8 }}>
+              No films match "{searchText}".
+            </Text>
+          )}
+
+          {filteredItems.map((item) => (
             <Swipeable
               key={item.id}
               renderRightActions={renderSwipeActions}
-              onSwipeableOpen={() => {
+              onSwipeableRightOpen={() => {
                 setSwipedItemText(swipeTextForItem(item));
                 setSwipeModalVisible(true);
               }}
@@ -735,7 +944,6 @@ function FilmsScreen() {
         </ScrollView>
       </ListShell>
 
-      {/* Modal for swiped item text */}
       <Modal
         transparent
         visible={swipeModalVisible}
@@ -791,9 +999,37 @@ function FilmsScreen() {
 }
 
 /* =====================================================
-   App & Navigation
+   NAVIGATION SETUP
+   Planets = Stack (List + Detail)
+   Tabs: PlanetsStack, Spaceships, Films
    ===================================================== */
 const Tab = createMaterialTopTabNavigator();
+const PlanetsStack = createNativeStackNavigator();
+
+function PlanetsStackScreen() {
+  return (
+    <PlanetsStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: "#020617" },
+        headerTintColor: "white",
+        headerTitleStyle: { fontWeight: "700" },
+      }}
+    >
+      <PlanetsStack.Screen
+        name="PlanetsList"
+        component={PlanetsScreen}
+        options={{ title: "Planets" }}
+      />
+      <PlanetsStack.Screen
+        name="PlanetDetail"
+        component={PlanetDetailScreen}
+        options={({ route }) => ({
+          title: route.params?.name || "Planet Detail",
+        })}
+      />
+    </PlanetsStack.Navigator>
+  );
+}
 
 export default function App() {
   return (
@@ -807,7 +1043,8 @@ export default function App() {
             tabBarIndicatorStyle: { backgroundColor: "white" },
           }}
         >
-          <Tab.Screen name="Planets" component={PlanetsScreen} />
+          {/* Planets tab uses a Stack (list + detail) */}
+          <Tab.Screen name="Planets" component={PlanetsStackScreen} />
           <Tab.Screen name="Spaceships" component={SpaceshipsScreen} />
           <Tab.Screen name="Films" component={FilmsScreen} />
         </Tab.Navigator>
